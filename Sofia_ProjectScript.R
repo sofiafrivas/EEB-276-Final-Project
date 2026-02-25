@@ -1,8 +1,20 @@
+# Notes -------------------------------------------------------------------
+#stepAIC function to compare models 
+#compare AIC scores and r squared (pseudo r squared) 
+#subsample data and compare to whole data 
+#total mean of all recruits (add columns for total mean) 
+#look into different family for glm models
+
+# Load First --------------------------------------------------------------
+
 require(librarian)
 librarian::shelf(tidyverse, here, janitor, googlesheets4, lubridate, splitstackshape,
-                 dplyr,ggplot2,pwr2,tidyr, broom, ggpubr, paletteer)
-install.packages("performance")
-library(performance)
+                 dplyr,ggplot2,pwr2,tidyr, broom, ggpubr, paletteer, performance)
+
+install.packages("MASS")   # run once if not installed
+library(MASS)
+library(ggeffects)
+
 
 #don't run these two lines 
 load(file.path("/Volumes/enhydra/data/students/sofia/zone_level_data.rda"))
@@ -19,29 +31,18 @@ gi_predictors <- gonadindex_raw %>%
             zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
   mutate(juveniles = macj + nerj + ptej + lsetj + eisj) %>% 
   mutate (n_macro_plants_m2 = n_macro_plants_20m2/20)
-##write.csv(gonadindex_raw, "gi_predictors.csv", row.names = FALSE)
-
+##write.csv(gonadindex_raw, "gi_predictors.csv", row.names = FALSE
 
 # Modeling ----------------------------------------------------------------
-
-model1 <- glm(mean_gi ~ purple_urchin_densitym2 + purple_urchin_conceiledm2 + 
-                cov_encrusting_red + macro_stipe_density_20m2
-                , data = gi_predictors, family = gaussian())
-
-model1 <- glm(mean_gi ~ mean_gonad_mass_g 
+m1 <- glm(mean_gi ~ mean_gonad_mass_g 
               + total_biomass_g +
                 purple_urchin_densitym2 + 
                 juveniles
-              #+ purple_urchin_conceiledm2  
-              #+ cov_encrusting_red 
-              #+ macro_stipe_density_20m2
               , data = gi_predictors, family = gaussian)
+summary(m1) #AIC: 384.43
+r2(m1) #0.599
 
-summary(model1)
-r2(model1)
-
-
-model2 <- glm(mean_gi ~ mean_gonad_mass_g +
+m2 <- glm(mean_gi ~ mean_gonad_mass_g +
                         total_biomass_g +
                         purple_urchin_densitym2 + 
                         juveniles + 
@@ -51,24 +52,39 @@ model2 <- glm(mean_gi ~ mean_gonad_mass_g +
                         lamr +
                         n_macro_plants_m2 
               , data = gi_predictors, family = gaussian)
+summary(m2) #AIC: 375.79
+r2(m2) #0.674
+step_model <- stepAIC(m2,
+                      direction = "both", 
+                      trace = TRUE)
 
-summary(model2)
-r2(model2)
+m3 <- glm(mean_gi ~ purple_urchin_densitym2 + #ecological drivers only 
+                    juveniles +
+                    lamr +
+                    n_macro_plants_m2 +
+                    macr +
+                    cov_mac_holdfast_live +
+                    cov_crustose_coralline,
+                  family = gaussian,
+                  data = gi_predictors)
+summary(m3)#AIC: 421.07
+r2(m3) #0.436
+stepAIC(m3, direction="both")
 
-model2_summary <- summary(model2)
-r_squared <- 1 - (model2_summary$deviance / model2_summary$null.deviance)
-
-
-glm_gamma <- glm(mean_gi ~ total_biomass_g, data =gi_predictors, family = Gamma(link = "log"))
-summary(glm_gamma)
-
-#stepAIC function to compare models 
-#compare AIC scores and r squared (pseudo r squared) 
-#subsample data and compare to whole data 
-#total mean of all recruits (add columns for total mean) 
-#look into different family for glm models
+m4 <- glm(mean_gi ~ purple_urchin_densitym2 +
+            juveniles +
+            lamr +
+            n_macro_plants_m2 +
+            macr +
+            red_urchin_densitym2, 
+          family = gaussian,
+          data = gi_predictors)
+summary(m4)#AIC: 421.07
+r2(m4) #0.436
+stepAIC(m4, direction="both")
 
 # Practice Plots ----------------------------------------------------------
+
 ggplot(gi_predictors, aes(x = pred_patch, y = mean_gi, fill = pred_patch)) +
   geom_violin(alpha = 0.6, trim = FALSE) +
   geom_boxplot(width = 0.15, outlier.shape = 21, fill = "white") +
