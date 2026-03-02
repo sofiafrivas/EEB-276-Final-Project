@@ -2,9 +2,7 @@
 
 require(librarian)
 librarian::shelf(tidyverse, here, janitor, googlesheets4, lubridate, splitstackshape,
-                 dplyr,ggplot2,pwr2,tidyr, broom, ggpubr, paletteer)
-install.packages("performance")
-library(performance)
+                 dplyr,ggplot2,pwr2,tidyr, broom, ggpubr, paletteer, performance)
 
 #don't run these two lines 
 load(file.path("/Volumes/enhydra/data/students/sofia/zone_level_data.rda"))
@@ -21,8 +19,8 @@ gi_predictors <- gonadindex_raw %>%
             zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
   mutate(juveniles = macj + nerj + ptej + lsetj + eisj) %>% 
   mutate (n_macro_plants_m2 = n_macro_plants_20m2/20)
-##write.csv(gonadindex_raw, "gi_predictors.csv", row.names = FALSE)
 
+##write.csv(gonadindex_raw, "gi_predictors.csv", row.names = FALSE)
 
 # Modeling ----------------------------------------------------------------
 
@@ -51,7 +49,7 @@ model2 <- glm(mean_gi ~ mean_gonad_mass_g +
                 cov_crustose_coralline + 
                 cov_mac_holdfast_live +
                 lamr +
-                n_macro_plants_m2 
+                n_macro_plants_m2 +
               , data = gi_predictors, family = gaussian)
 
 summary(model2)
@@ -88,5 +86,107 @@ ggplot(gonadindex_raw, aes(x = zone, y = mean_gi)) +
   labs(title = "GI by Depth Zone",
        x = "Zone", y = "Mean Gonad Index (%)") +
   theme_classic()  
+
+# Modeling Exploration ----------------------------------------------------
+
+#command, shift, r to make a section in R
+
+#new tibble (JR)
+
+gi_predictors_2 <- gonadindex_raw %>%
+  mutate(site_id = paste(site, pred_patch, zone, year, sep = " ")) %>%
+  select(-c(patch_id, latitude, longitude, survey_date, site, site_type, patch_cat, 
+            zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
+  mutate(juveniles = macj + nerj + ptej + lsetj + eisj) %>% 
+  mutate (n_macro_plants_m2 = n_macro_plants_20m2/20) %>%
+  mutate (densitym2_purps_on_kelp = density20m2_purps_on_kelp/20)
+
+#model 3
+model3 <- glm(mean_gi ~ mean_gonad_mass_g +
+                total_biomass_g +
+                purple_urchin_densitym2 + 
+                juveniles + 
+                densitym2_purps_on_kelp
+              , data = gi_predictors_2, family = gaussian)
+
+summary(model3)
+r2(model3)
+
+#model 4
+model4 <- glm(mean_gi ~ mean_gonad_mass_g +
+                total_biomass_g +
+                purple_urchin_densitym2 + 
+                red_urchin_densitym2 +
+                red_urchin_conceiledm2 +
+                juveniles + 
+                densitym2_purps_on_kelp +
+                cov_bare_sand
+              , data = gi_predictors_2, family = gaussian)
+
+summary(model4)
+r2(model4)
+
+#model 5
+model5 <- glm(mean_gi ~ mean_gonad_mass_g +
+                total_biomass_g +
+                purple_urchin_densitym2 + 
+                risk_index +
+                juveniles + 
+                relief_cm +
+                cov_bare_sand
+              , data = gi_predictors_2, family = gaussian)
+
+summary(model5)
+r2(model5)
+
+#model 6
+model6 <- glm(mean_gi ~ n_biomass +
+                total_biomass_g +
+                purple_urchin_densitym2 +
+                purple_urchin_conceiledm2 +
+                risk_index +
+                relief_cm +
+                cov_bare_sand
+              , data = gi_predictors_2, family = gaussian)
+
+summary(model6)
+r2(model6)
+
+#model 7
+model7 <- glm(mean_gi ~ mean_gonad_mass_g +
+                total_biomass_g +
+                lamr +
+                macr +
+                juveniles +
+                cov_mac_holdfast_live +
+                cov_lam_holdfast_live +
+                n_macro_plants_m2 
+              , data = gi_predictors_2, family = Gamma (link = "log"))
+
+summary(model7)
+r2(model7)
+
+#model 8
+model8 <- glm(mean_gi ~ mean_gonad_mass_g +
+                total_biomass_g +
+                purple_urchin_densitym2 +
+                purple_urchin_conceiledm2 +
+                risk_index +
+                relief_cm +
+                cov_bare_sand
+              , data = gi_predictors_2, family = Gamma (link = "log"))
+
+summary(model8)
+r2(model8)
+
+#model 9
+model 9 <- glm(mean_gi ~ mean_gonad_mass_g +
+                 total_biomass_g +
+                 purple_urchin_densitym2 +
+                 purple_urchin_conceiledm2 +
+                 risk_index +
+                 relief_cm +
+                 cov_bare_sand
+               , data = gi_predictors_2, family = Gamma (link = "log"))
 
 
