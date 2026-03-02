@@ -14,7 +14,8 @@ librarian::shelf(tidyverse, here, janitor, googlesheets4, lubridate, splitstacks
 install.packages("MASS")   # run once if not installed
 library(MASS)
 library(ggeffects)
-
+library(brms)
+library(cmdstanr)
 
 #don't run these two lines 
 load(file.path("/Volumes/enhydra/data/students/sofia/zone_level_data.rda"))
@@ -83,6 +84,34 @@ summary(m4)#AIC: 421.07
 r2(m4) #0.436
 stepAIC(m4, direction="both")
 
+brm_formula <- bf(
+  mean_gi ~ purple_urchin_densitym2 +
+    juveniles +
+    lamr +
+    macr +
+    cov_mac_holdfast_live +
+    cov_crustose_coralline
+)
+
+priors <- c(
+  prior(normal(0, 2), class = "b"),        # slopes
+  prior(normal(8, 5), class = "Intercept"),
+  prior(student_t(3, 0, 5), class = "sigma")
+)
+
+brm_model <- brm(
+  formula = brm_formula,
+  data = gi_predictors,
+  family = gaussian(),
+  prior = priors,
+  chains = 4,
+  iter = 4000,
+  warmup = 1000,
+  cores = 4,
+  seed = 42
+)
+summary(brm_model)
+plot(brm_model)
 # Practice Plots ----------------------------------------------------------
 
 ggplot(gi_predictors, aes(x = pred_patch, y = mean_gi, fill = pred_patch)) +
