@@ -11,7 +11,6 @@ require(librarian)
 librarian::shelf(tidyverse, here, janitor, googlesheets4, lubridate, splitstackshape,
                  dplyr,ggplot2,pwr2,tidyr, broom, ggpubr, paletteer, performance)
 
-install.packages("MASS")   # run once if not installed
 library(MASS)
 library(ggeffects)
 library(brms)
@@ -28,7 +27,7 @@ gonadindex_raw <- readRDS("quad_build3.rds")
 
 gi_predictors <- gonadindex_raw %>%
   mutate(site_id = paste(site, pred_patch, zone, year, sep = " ")) %>%
-  select(-c(patch_id, latitude, longitude, survey_date, site, site_type, patch_cat, 
+  dplyr::select(-c(patch_id, latitude, longitude, survey_date, site, site_type, patch_cat, 
             zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
   mutate(juveniles = macj + nerj + ptej + lsetj + eisj) %>% 
   mutate (n_macro_plants_m2 = n_macro_plants_20m2/20)
@@ -114,22 +113,81 @@ summary(brm_model)
 plot(brm_model)
 # Practice Plots ----------------------------------------------------------
 
-ggplot(gi_predictors, aes(x = pred_patch, y = mean_gi, fill = pred_patch)) +
-  geom_violin(alpha = 0.6, trim = FALSE) +
-  geom_boxplot(width = 0.15, outlier.shape = 21, fill = "white") +
-  geom_jitter(width = 0.08, alpha = 0.4, size = 1.5) +
-  scale_fill_manual(values = c("BAR" = "#d73027", "INCIP" = "#fee090", "FOR" = "#1a9641")) +
-  labs(title = "Gonad Index by Habitat Type",
-       x = "Habitat Type", y = "Mean Gonad Index (GI)", fill = NULL) +
-  theme_classic() +
-  theme(legend.position = "none")
+library(ggplot2)
+install.packages("ggfortify")
+library(ggfortify)
+
+# Run PCA (on numeric predictors only, no NAs)
+pca <- prcomp(na.omit(gi_predictors %>% dplyr::select(where(is.numeric))), 
+              scale. = TRUE)
+
+# Quick plot
+autoplot(pca, data = na.omit(gi_predictors), 
+         colour = "pred_patch",  # color by a grouping variable
+         loadings = TRUE, 
+         loadings.label = TRUE)
+
+# PC1 vs PC3
+autoplot(pca, x = 1, y = 3, data = na.omit(gi_predictors),
+         colour = "site_id",
+         loadings = TRUE,
+         loadings.label = TRUE)
+
+# PC2 vs PC3
+autoplot(pca, x = 2, y = 3, data = na.omit(gi_predictors),
+         colour = "site_id",
+         loadings = TRUE,
+         loadings.label = TRUE)
+
+pca$rotation[, 1:3]
+sort(abs(pca$rotation[,1]), decreasing = TRUE) |> head(10)
+
+pc_scores <- as.data.frame(pca$x[, 1:8]) 
+
+pc_data <- pc_scores %>%
+  mutate(mean_gi = na.omit(gi_predictors)$mean_gi)
+
+pc_data$site_id <- na.omit(gi_predictors)$site_id
+
+model_brms <- brm(mean_gi ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + 
+                    (1 | site_id),
+                  data = pc_data,
+                  family = gaussian(),
+                  chains = 4, iter = 2000)
+
+#this one looks best rn 
+model_brms <- brm(mean_gi ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8,
+                  data = pc_data,
+                  family = gaussian(),
+                  chains = 4, iter = 4000)
+
+summary(model_brms)
+r2(model_brms)
+
+sort(abs(pca$rotation[,2]), decreasing = TRUE) |> head(10)
+
+library(bayesplot)
+mcmc_areas(model_brms, pars = vars(starts_with("b_")))
+plot(model_brms)
+
+pp_check(model_brms)
 
 
-ggplot(gonadindex_raw, aes(x = zone, y = mean_gi)) +
-  geom_boxplot(alpha = 0.7, position = position_dodge(0.8),
-               outlier.size = 1.5) +
-  labs(title = "GI by Depth Zone",
-       x = "Zone", y = "Mean Gonad Index (%)") +
-  theme_classic()  
+loadings <- as.data.frame(pca$rotation[, c(1,3,5,6,8)])
+
+for(pc in c("PC1","PC3","PC5","PC6","PC8")) {
+  cat("\n---", pc, "---\n")
+  cat("TOP POSITIVE:\n")
+  print(head(sort(loadings[,pc], decreasing = TRUE), 5))
+  cat("TOP NEGATIVE:\n")
+  print(head(sort(loadings[,pc], decreasing = FALSE), 5))
+}
+
+library(corrplot)
+corrplot(cor(gi_predictors %>% dplyr::select(where(is.numeric)), use = "complete.obs"))
 
 
+install.packages("factoextra")
+library(factoextra)
+
+fviz_eig(pca)
