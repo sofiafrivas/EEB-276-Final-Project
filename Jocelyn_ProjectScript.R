@@ -30,6 +30,31 @@ gi_predictors <- gonadindex_raw %>%
   # Changing area data to 1 m2
   mutate (n_macro_plants_m2 = n_macro_plants_20m2/20)
 
+# New Tibble (Sofia's Data Wrangling Section)
+gi_predictors <- gonadindex_raw %>%
+  mutate(site_id = paste(site, pred_patch, zone, year, sep = " ")) %>%
+  dplyr::select(-c(patch_id, latitude, longitude, survey_date, site, site_type, patch_cat, 
+                   zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
+  mutate(juveniles = macj + nerj + ptej + lsetj + eisj,
+         n_macro_plants_m2 = n_macro_plants_20m2/20,
+         macro_stipe_density_m2 = macro_stipe_density_20m2/20,
+         adults = (density20m2_ptecal + density20m2_eisarb + density20m2_nerlue + density20m2_lamset)/20,
+         marine_snails = tegula_densitym2 + pomaulax_densitym2,
+         density_cancer = density20m2_cancer_spp/20,
+         density_lamstump = density20m2_lamstump/20,
+         density_macstump = density20m2_macstump/20)
+
+predictors_simple <- gi_predictors %>% 
+  dplyr::select(mean_gi, n_macro_plants_m2, macro_stipe_density_m2, adults, juveniles,
+                density_cancer, density_lamstump, density_macstump, relief_cm, risk_index,
+                purple_urchin_densitym2, purple_urchin_conceiledm2, red_urchin_densitym2,
+                red_urchin_conceiledm2, marine_snails, lamr, macr, cov_crustose_coralline,
+                cov_desmarestia_spp, cov_lam_holdfast_live, cov_articulated_coralline, 
+                cov_fleshy_red, cov_bare_rock, cov_green_algae, cov_barnacle, cov_bare_sand,
+                cov_colonial_tunicate, cov_dictyota_dictyopteris, cov_sponge, cov_dead_kelp_holdfast_any,
+                cov_mac_holdfast_live, cov_red_turf_2_cm, cov_corynactis_californica,
+                cov_dictyoneurum_spp)
+
 # Distribution Testing ----------------------------------------------------
 
 # Plotting the distribution of "mean_gi" data

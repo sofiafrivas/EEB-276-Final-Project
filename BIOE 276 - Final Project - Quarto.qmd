@@ -5,23 +5,32 @@ editor: visual
 authors: Sofia Rivas & Jocelyn Rojas
 ---
 
-## Quarto
+## Project Title
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+### Project Overview
 
-## Running Code
+#### Research Question
 
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+To what extent do biological and environmental variables predict sea urchin gonad index across kelp forests and urchin barrens, and which variables are the strongest predictors of gonad index?
+
+#### Background
+
+-   Why is this research question important?
+
+#### Target Audience:
+
+Recovery and restoration practitioners and researchers
+
+### Exploratory Data Analyses
 
 ```{r}
-1 + 1
+
+# Loading Relevant Packages
+
 ```
 
-You can add options to executable code like this
+#### Data Wrangling
 
 ```{r}
-#| echo: false
-2 * 2
+# Loading Data 
 ```
-
-The `echo: false` option disables the printing of code (only output is displayed).
