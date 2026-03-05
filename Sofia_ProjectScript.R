@@ -48,7 +48,10 @@ predictors_simple <- gi_predictors %>%
                 cov_fleshy_red, cov_bare_rock, cov_green_algae, cov_barnacle, cov_bare_sand,
                 cov_colonial_tunicate, cov_dictyota_dictyopteris, cov_sponge, cov_dead_kelp_holdfast_any,
                 cov_mac_holdfast_live, cov_red_turf_2_cm, cov_corynactis_californica,
-                cov_dictyoneurum_spp)
+                cov_dictyoneurum_spp) %>% 
+  na.omit()
+
+write.csv(predictors_simple, file = "predictors_simple.csv", row.names = FALSE)
 
 # Modeling ----------------------------------------------------------------
 
@@ -65,22 +68,118 @@ model_horseshoe <- brm(mean_gi ~ .,
                 chains = 4, iter = 6000, warmup = 3000,
                 control = list(adapt_delta = 0.99, max_treedepth = 15),
                 cores = 4)
-summary(model_horseshoe)
+summary(model_horseshoe) #only 1 predictor is significant 
 
 loo_horseshoe  <- loo(model_horseshoe)
 
-model_pca <- brm(mean_gi ~ PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8,
+pca <- prcomp(predictors_simple %>% dplyr::select(-mean_gi), scale. = TRUE)
+pc_scores <- as.data.frame(pca$x[, 1:4])
+pc_data <- pc_scores %>%
+  mutate(mean_gi = predictors_simple$mean_gi)
+
+fviz_eig(pca)
+
+model_pca <- brm(mean_gi ~ PC1 + PC2 + PC3 + PC4,
+                 data = pc_data,
+                 family = gaussian(),
+                 prior = priors_pca,
+                 chains = 4, iter = 4000, warmup = 2000,
+                 cores = 4)
+summary(model_pca) #PC1 and PC3 are significant
+
+mcmc_areas(model_pca,
+           pars = vars(starts_with("b_"), -b_Intercept),
+           prob = 0.95,
+           prob_outer = 1.0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  theme_classic()
+
+pp_check(model_pca, ndraws = 100)
+
+for(pc in c("PC1","PC2","PC3")) {
+  cat("\n---", pc, "---\n")
+  cat("TOP POSITIVE:\n")
+  print(head(sort(pca$rotation[,pc], decreasing = TRUE), 5))
+  cat("TOP NEGATIVE:\n")
+  print(head(sort(pca$rotation[,pc], decreasing = FALSE), 5))
+}
+
+pc_data$fitted <- fitted(model_pca)[, "Estimate"]
+pc_data$lower  <- fitted(model_pca)[, "Q2.5"]
+pc_data$upper  <- fitted(model_pca)[, "Q97.5"]
+
+ggplot(pc_data, aes(x = fitted, y = mean_gi)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = lower, xmax = upper), alpha = 0.3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Predicted mean_gi", y = "Observed mean_gi") +
+  theme_classic()
+
+
+
+
+dev.off()
+
+
+library(ggfortify)
+autoplot(pca, x = 1, y = 3, data = na.omit(predictors_simple),
+         loadings = TRUE,
+         loadings.label = TRUE)
+
+priors_pca <- c(
+  prior(normal(0, 1), class = "b"),
+  prior(normal(6.5, 2), class = "Intercept"),
+  prior(student_t(3, 0, 2), class = "sigma")
+)
+
+model_pca2 <- brm(mean_gi ~ .,
                  data = pc_data,
                  family = gaussian(),
                  prior = priors,
                  chains = 4, iter = 4000, warmup = 2000,
                  cores = 4)
+summary(model_pca2)
 
-loo_pca <- loo(model_brms_final)
+fviz_eig(pca) 
 
-loo_compare(loo_hs, loo_pca)
+loo_pca <- loo(model_pca)
 
+loo_compare(loo_horseshoe, loo_pca) #either looks good
 
+pp_check(model_horseshoe) 
+
+library(bayesplot)
+
+mcmc_areas(model_horseshoe,
+           pars = vars(starts_with("b_"), -b_Intercept),
+           prob = 0.95,
+           prob_outer = 1.0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  theme_classic()
+
+predictors_simple$predicted <- fitted(model_horseshoe)[, "Estimate"]
+
+ggplot(predictors_simple, aes(x = predicted, y = mean_gi)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Predicted mean_gi", y = "Observed mean_gi") +
+  theme_classic()
+
+#PCA (trying again)
+
+priors_hs <- c(
+  prior(horseshoe(df = 3), class = "b"),
+  prior(normal(6.5, 2), class = "Intercept"),
+  prior(student_t(3, 0, 2), class = "sigma"))
+
+model_hs <- brm(mean_gi ~ .,
+                data = predictors_simple,
+                family = gaussian(),
+                prior = priors_hs,
+                chains = 4, iter = 6000, warmup = 3000,
+                control = list(adapt_delta = 0.95, max_treedepth = 15),
+                cores = 4)
+summary(model_hs)
 
 #GLM 
 model_glm <- glm(mean_gi ~ ., data = predictors_simple, family = gaussian())
