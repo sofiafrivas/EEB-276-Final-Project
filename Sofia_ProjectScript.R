@@ -77,6 +77,9 @@ pc_scores <- as.data.frame(pca$x[, 1:4])
 pc_data <- pc_scores %>%
   mutate(mean_gi = predictors_simple$mean_gi)
 
+install.packages("factoextra")
+library(factoextra)
+
 fviz_eig(pca)
 
 model_pca <- brm(mean_gi ~ PC1 + PC2 + PC3 + PC4,
