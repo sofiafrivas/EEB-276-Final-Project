@@ -206,5 +206,11 @@ corrplot(cor(gi_predictors %>% dplyr::select(where(is.numeric)), use = "complete
 install.packages("factoextra")
 library(factoextra)
 
-fviz_eig(pca)
+fviz_eig(pca) 
+
+
+
+
+
+
 
