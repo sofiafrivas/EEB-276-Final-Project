@@ -51,35 +51,29 @@ predictors_simple <- gi_predictors %>%
                 cov_dictyoneurum_spp) %>% 
   na.omit()
 
-write.csv(predictors_simple, file = "predictors_simple.csv", row.names = FALSE)
 
 # Modeling ----------------------------------------------------------------
 
-#PCA 
-priors_horseshoe <- c(
-  prior(horseshoe(df = 3), class = "b"),
-  prior(normal(6.5, 2), class = "Intercept"),
-  prior(student_t(3, 0, 2), class = "sigma"))
-
-model_horseshoe <- brm(mean_gi ~ .,
-                data = predictors_simple,
-                family = gaussian(),
-                prior = priors_horseshoe,
-                chains = 4, iter = 6000, warmup = 3000,
-                control = list(adapt_delta = 0.99, max_treedepth = 15),
-                cores = 4)
-summary(model_horseshoe) #only 1 predictor is significant 
-
-loo_horseshoe  <- loo(model_horseshoe)
-
+#dont really understand but this is the first step 
 pca <- prcomp(predictors_simple %>% dplyr::select(-mean_gi), scale. = TRUE)
 pc_scores <- as.data.frame(pca$x[, 1:4])
 pc_data <- pc_scores %>%
   mutate(mean_gi = predictors_simple$mean_gi)
 
+<<<<<<< HEAD
 install.packages("factoextra")
 library(factoextra)
 
+=======
+#setting priors 
+priors_pca <- c(
+  prior(normal(0, 1), class = "b"),
+  prior(normal(6.5, 2), class = "Intercept"),
+  prior(student_t(3, 0, 2), class = "sigma"))
+
+#scree plot
+library(factoextra)
+>>>>>>> 725e90424ac751b01807966226641092588c17d1
 fviz_eig(pca)
 
 model_pca <- brm(mean_gi ~ PC1 + PC2 + PC3 + PC4,
@@ -119,74 +113,16 @@ ggplot(pc_data, aes(x = fitted, y = mean_gi)) +
   theme_classic()
 
 
-
-
-dev.off()
-
-
-library(ggfortify)
-autoplot(pca, x = 1, y = 3, data = na.omit(predictors_simple),
-         loadings = TRUE,
-         loadings.label = TRUE)
-
-priors_pca <- c(
-  prior(normal(0, 1), class = "b"),
-  prior(normal(6.5, 2), class = "Intercept"),
-  prior(student_t(3, 0, 2), class = "sigma")
-)
-
-model_pca2 <- brm(mean_gi ~ .,
-                 data = pc_data,
-                 family = gaussian(),
-                 prior = priors,
-                 chains = 4, iter = 4000, warmup = 2000,
-                 cores = 4)
-summary(model_pca2)
-
-fviz_eig(pca) 
-
-loo_pca <- loo(model_pca)
-
-loo_compare(loo_horseshoe, loo_pca) #either looks good
-
-pp_check(model_horseshoe) 
-
-library(bayesplot)
-
-mcmc_areas(model_horseshoe,
-           pars = vars(starts_with("b_"), -b_Intercept),
-           prob = 0.95,
-           prob_outer = 1.0) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
-  theme_classic()
-
-predictors_simple$predicted <- fitted(model_horseshoe)[, "Estimate"]
-
-ggplot(predictors_simple, aes(x = predicted, y = mean_gi)) +
-  geom_point() +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-  labs(x = "Predicted mean_gi", y = "Observed mean_gi") +
-  theme_classic()
-
-#PCA (trying again)
-
-priors_hs <- c(
-  prior(horseshoe(df = 3), class = "b"),
-  prior(normal(6.5, 2), class = "Intercept"),
-  prior(student_t(3, 0, 2), class = "sigma"))
-
-model_hs <- brm(mean_gi ~ .,
-                data = predictors_simple,
-                family = gaussian(),
-                prior = priors_hs,
-                chains = 4, iter = 6000, warmup = 3000,
-                control = list(adapt_delta = 0.95, max_treedepth = 15),
-                cores = 4)
-summary(model_hs)
-
-#GLM 
-model_glm <- glm(mean_gi ~ ., data = predictors_simple, family = gaussian())
-
-summary(model_glm)
-stepAIC(model_glm)
+## glm 
+glm(mean_gi ~ cov_mac_holdfast_live + 
+      macro_stipe_density_m2 + 
+      n_macro_plants_m2 + 
+      cov_bare_sand + 
+      purple_urchin_conceiledm2 + 
+    , data = predic, family = gaussian)
+summary(m3) #AIC: 371.21
+cov_mac_holdfast_live    macro_stipe_density_m2         n_macro_plants_m2 
+0.2891270                 0.2880061                 0.2824447 
+cov_bare_sand purple_urchin_conceiledm2 
+0.2411657                 0.2153091 
 
