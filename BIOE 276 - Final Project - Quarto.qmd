@@ -62,7 +62,7 @@ gi_predictors <- gonadindex_raw %>%
 
 #### GLM Model Testing
 
-We received guidance from Sofia's academic advisor, \_\_\_\_, to determine the type of model that would be most appropriate for answering our research question. He suggested we run a Generalized Linear Model (glm). Our data frame contained over 70 predictor variables so we brainstormed variable combinations when writing out our models.
+We received guidance from Sofia's academic advisor, Joshua Smith, to determine the type of model that would be most appropriate for answering our research question. He suggested we run a Generalized Linear Model (glm). Our data frame contained over 70 predictor variables so we brainstormed variable combinations when writing out our models.
 
 After running each model, we used the summary() and r2() functions to determine the AIC and r2 values. We were advised to play close attention to each model's r squared value.
 
@@ -168,29 +168,29 @@ We continued to run similar models with different combinations of predictors but
 
 #### Distribution Testing
 
-We wanted to check in our data was followed a Gaussian distribution so we ran the following lines of code.
+We wanted to check if our data was followed a Gaussian distribution so we ran the following lines of code.
 
 ```{r}
 # Plotting the distribution of "mean_gi" data
 hist(gi_predictors_2$mean_gi)
+```
 
+```{r}
 # Produces a Q-Q plot to assess whether the data follows a normal distribution
 # If data (more or less) follows a straight line, it is normally distributed
 qqnorm(gi_predictors_2$mean_gi)
 
 # Adds a line to Q-Q plot
 qqline(gi_predictors_2$mean_gi)
-
 ```
 
-Because our data was normally distributed, we decided to run a Bayesian alterntive to Linear Mixed Effects Models using the brms package. Our data was collected from different sites and within each site, sampling took place across various site types.
+Our data was normally distributed with a slight right skew, so we decided to run a Bayesian alternative to a Linear Mixed Effects Model using the **brms** package. Our data was collected from different sites and within each site, sampling took place across various site types.
 
 Site (Location) –\> Site Type (Kelp forest, Urchin Barren, and Intermediate Zone) –\> Site Depth (Shallow/Deep)
 
-#### Bayesian Model Testing 
+#### Bayesian Model Testing
 
 ```{r}
-
 # Our first exploratory Bayseian model included the density of two different species of kelp (major purple urchin food source), site type, and site location as a random effect
 
 mean_gi_model <- brm (data = gi_predictors,
@@ -200,7 +200,9 @@ mean_gi_model <- brm (data = gi_predictors,
              seed = 4, 
              file = "output/mean_gi_model")
 
-# We used the summary() and plot() function to check the Rhat values, confidence intervals, and chains. 
+# We used the summary() and plot() function to check: 
+  # Rhat values, confidence intervals, and chains. 
+
 summary(mean_gi_model)
 plot(mean_gi_model)
 ```
@@ -228,9 +230,14 @@ pca <- prcomp(gi_numeric %>% dplyr::select(-mean_gi),
 library(factoextra)
 fviz_eig(pca) # Function to plot a scree plot
 
-pc_scores <- as.data.frame(pca$x[, 1:7]) #number based on scree plot
+# Based on the scree plot, we needed to run 7 PCAs
+pc_scores <- as.data.frame(pca$x[, 1:7]) 
 
+# Added the response variable (mean_gi) back in
 pc_data <- pc_scores %>%
-  mutate(mean_gi = gi_numeric$mean_gi)  # add response variable back
+  mutate(mean_gi = gi_numeric$mean_gi)
+
+# Evaluates the
+pp_check(model_prior)  # should look like plausible mean_gi values
 
 ```
