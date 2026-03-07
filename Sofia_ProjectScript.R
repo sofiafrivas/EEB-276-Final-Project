@@ -39,7 +39,7 @@ gi_predictors <- gonadindex_raw %>%
          density_lamstump = density20m2_lamstump/20,
          density_macstump = density20m2_macstump/20)
 
-predictors_simple <- gi_predictors %>% 
+predictors <- gi_predictors %>% 
   dplyr::select(mean_gi, n_macro_plants_m2, macro_stipe_density_m2, adults, juveniles,
                 density_cancer, density_lamstump, density_macstump, relief_cm, risk_index,
                 purple_urchin_densitym2, purple_urchin_conceiledm2, red_urchin_densitym2,
@@ -60,6 +60,61 @@ pc_scores <- as.data.frame(pca$x[, 1:4])
 pc_data <- pc_scores %>%
   mutate(mean_gi = predictors_simple$mean_gi)
 
+summary(pca)$importance[3,] 
+
+pc_scores1 <- as.data.frame(pca$x[, 1:12])
+pc_data1 <- pc_scores1 %>%
+  mutate(mean_gi = predictors_simple$mean_gi)
+glm(mean_gi ~ ., data = pc_data)
+
+summary(pca)
+pve <- pca$sdev^2 / sum(pca$sdev^2)
+round(pve, 3)
+
+
+
+pc_scores <- as.data.frame(pca$x[, 1:12])
+
+pc_data <- pc_scores %>%
+  mutate(mean_gi = predictors$mean_gi)
+glm(mean_gi ~ ., data = pc_data)
+
+biplot(pca, scale = 0)
+library(factoextra)
+
+fviz_pca_var(pca,
+             col.var = "contrib",
+             gradient.cols = c("lightblue","blue","darkblue"),
+             repel = TRUE) ## look into this 
+
+#combines pca and horseshoe
+posterior <- as_draws_df(brm_hs)
+coef_cols <- grep("^b_", colnames(posterior), value = TRUE)
+coef_cols <- coef_cols[coef_cols != "b_Intercept"]
+coef_summary <- posterior %>%
+  summarise(across(all_of(coef_cols), ~ median(.))) %>%
+  pivot_longer(everything(), names_to = "predictor", values_to = "median") %>%
+  mutate(
+    predictor_name = gsub("^b_", "", predictor),
+    median = as.numeric(median)
+  )
+# Select only meaningful predictors
+top_predictors <- coef_summary %>%
+  filter(abs(median) > 0.05) %>%
+  pull(predictor_name)
+# 2. Create color vector for PCA variable plot
+var_colors <- ifelse(rownames(pca$rotation) %in% top_predictors, "Top", "Other")
+# 3. Plot PCA variables with top predictors highlighted
+fviz_pca_var(
+  pca,
+  col.var = var_colors,      # discrete values: "Top" vs "Other"
+  repel = TRUE
+) +
+  scale_color_manual(values = c("Top" = "red", "Other" = "grey70")) +
+  labs(title = "PCA variable plot highlighting top horseshoe predictors")
+
+
+
 #setting priors 
 priors_pca <- c(
   prior(normal(0, 1), class = "b"),
@@ -69,54 +124,83 @@ priors_pca <- c(
 #scree plot
 library(factoextra)
 fviz_eig(pca)
+plot(pca, type = "l")
 
-model_pca <- brm(mean_gi ~ PC1 + PC2 + PC3 + PC4,
-                 data = pc_data,
-                 family = gaussian(),
-                 prior = priors_pca,
-                 chains = 4, iter = 4000, warmup = 2000,
-                 cores = 4)
-summary(model_pca) #PC1 and PC3 are significant
 
-mcmc_areas(model_pca,
-           pars = vars(starts_with("b_"), -b_Intercept),
-           prob = 0.95,
-           prob_outer = 1.0) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
-  theme_classic()
 
-pp_check(model_pca, ndraws = 100)
+predictors_scaled <- predictors %>%
+  mutate(across(-mean_gi, scale))
 
-for(pc in c("PC1","PC2","PC3")) {
-  cat("\n---", pc, "---\n")
-  cat("TOP POSITIVE:\n")
-  print(head(sort(pca$rotation[,pc], decreasing = TRUE), 5))
-  cat("TOP NEGATIVE:\n")
-  print(head(sort(pca$rotation[,pc], decreasing = FALSE), 5))
-}
+brm_hs <- brm(
+  mean_gi ~ .,
+  data = predictors_scaled,
+  prior = prior(horseshoe(1), class = "b"),
+  control = list(adapt_delta = 0.99)
+)
+summary(brm_hs)
+plot(brm_hs)
+fixef(brm_hs)
+pp_check(brm_hs)
+conditional_effects(brm_hs)
+bayes_R2(brm_hs)
+library(bayesplot)
+posterior <- as_draws_df(brm_hs)
+coef_cols <- grep("^b_", colnames(posterior), value = TRUE)
+coef_cols <- coef_cols[coef_cols != "b_Intercept"]  # remove intercept
+mcmc_intervals(posterior, pars = coef_cols)
+coef_summary <- posterior %>%
+  summarise(across(all_of(coef_cols), ~ median(.))) %>%
+  pivot_longer(everything(), names_to = "predictor", values_to = "median")
+top_predictors <- coef_summary %>%
+  filter(abs(median) > 0.05) %>%  # threshold can be adjusted
+  pull(predictor) %>%
+  gsub("^b_", "", .)  # remove b_ prefix to match PCA loadings
+loadings <- as.data.frame(pca$rotation)
+top_loadings <- loadings[top_predictors, 1:4]  # first 4 PCs
+top_loadings$predictor <- rownames(top_loadings)
+top_loadings
+long_loadings <- top_loadings %>%
+  pivot_longer(cols = starts_with("PC"), names_to = "PC", values_to = "loading")
 
-pc_data$fitted <- fitted(model_pca)[, "Estimate"]
-pc_data$lower  <- fitted(model_pca)[, "Q2.5"]
-pc_data$upper  <- fitted(model_pca)[, "Q97.5"]
+# Merge with effect size from horseshoe
+long_loadings <- long_loadings %>%
+  left_join(coef_summary %>% mutate(predictor = gsub("^b_", "", predictor)), by = "predictor")
 
-ggplot(pc_data, aes(x = fitted, y = mean_gi)) +
-  geom_point() +
-  geom_errorbarh(aes(xmin = lower, xmax = upper), alpha = 0.3) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-  labs(x = "Predicted mean_gi", y = "Observed mean_gi") +
-  theme_classic()
+# Plot
+ggplot(long_loadings, aes(x = PC, y = loading, fill = median)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~predictor, scales = "free_y") +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue") +
+  theme_classic() +
+  labs(
+    title = "Top predictor loadings on PCs with horseshoe effect size",
+    y = "PCA loading",
+    fill = "Median posterior"
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## glm 
-glm(mean_gi ~ cov_mac_holdfast_live + 
+glm_pca <- glm(mean_gi ~ cov_mac_holdfast_live + 
       macro_stipe_density_m2 + 
       n_macro_plants_m2 + 
       cov_bare_sand + 
-      purple_urchin_conceiledm2 + 
-    , data = predic, family = gaussian)
-summary(m3) #AIC: 371.21
-cov_mac_holdfast_live    macro_stipe_density_m2         n_macro_plants_m2 
-0.2891270                 0.2880061                 0.2824447 
-cov_bare_sand purple_urchin_conceiledm2 
-0.2411657                 0.2153091 
+      purple_urchin_conceiledm2  
+    , data = predictors_simple, family = gaussian)
+summary(glm_pca)
+r2(glm_pca)
 
+glm(mean_gi ~ PC1 + PC2 + PC3 + PC4, data = pc_data)
+brm(mean_gi ~ PC1 + PC2 + PC3 + PC4, data = pc_data)

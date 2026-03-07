@@ -1,0 +1,156 @@
+---
+title: "Explanatory Data Analysis"
+author: "Sofia Rivas and Jocelyn Rojas"
+format: pdf
+editor: visual
+---
+
+# 1. Load Relevant Packages
+
+```{r}
+library(tidyverse) #data wrangling (includes other packages)
+library(dplyr) #data wrangling 
+library(ggplot2) #plotting
+library(brms) #Bayesian statistics 
+library(bayesplot) #posterior probability distributions 
+library(factoextra) #variance plot (scree plot)
+```
+
+# 2. Data Wrangling
+
+explain where the data came from and why we select certain columns
+
+```{r}
+#raw data
+predictors_raw <- readRDS("quad_build3.rds") 
+
+#select relevant columns and delete rows with NA values 
+predictors <- gi_predictors %>% 
+  dplyr::select(mean_gi, n_macro_plants_m2, macro_stipe_density_m2, adults, juveniles, density_cancer, density_lamstump, density_macstump, relief_cm, risk_index, purple_urchin_densitym2, purple_urchin_conceiledm2, red_urchin_densitym2, red_urchin_conceiledm2, marine_snails, lamr, macr, cov_crustose_coralline, cov_desmarestia_spp, cov_lam_holdfast_live, cov_articulated_coralline, cov_fleshy_red, cov_bare_rock, cov_green_algae, cov_barnacle, cov_bare_sand, cov_colonial_tunicate, cov_dictyota_dictyopteris, cov_sponge, cov_dead_kelp_holdfast_any, cov_mac_holdfast_live, cov_red_turf_2_cm, cov_corynactis_californica, cov_dictyoneurum_spp) %>% 
+  na.omit()
+
+
+```
+
+# 3. Principal Component Analysis
+
+-   Explain why we chose PCA
+
+## Step 1: PCA
+
+```{r}
+#run PCA: run only on predictor variables, not the response variable (mean_gi)
+#standardize variables 
+pca <- prcomp(predictors %>% 
+                dplyr::select(-mean_gi), 
+                scale. = TRUE) 
+
+#visualize 
+fviz_eig(pca)
+```
+
+```{r}
+#create matrix of raw PC scores (chosen from scree plot)
+pc_scores <- as.data.frame(pca$x[, 1:10])
+
+#add response variable (mean_gi) into new dataframe
+pc_data <- pc_scores %>%
+              mutate(mean_gi = predictors$mean_gi)
+
+#set priors for brm 
+priors_pca <- c(
+  prior(normal(0, 1), class = "b"),
+  prior(normal(6.5, 2), class = "Intercept"), #mean mean_gi is ~6.5
+  prior(student_t(3, 0, 2), class = "sigma"))
+
+#run brm model
+model_pca <- brm(mean_gi ~ .,
+                 data = pc_data,
+                 family = gaussian(),
+                 prior = priors_pca,
+                 chains = 4, iter = 4000, warmup = 2000,
+                 cores = 4)
+summary(model_pca) #PC1, PC3, and PC6 are significant!
+```
+
+explain why we switch to skew_normal family (include pp_checks and loos)
+
+```{r}
+#posterior predictive check 
+pp_check(model_pca) #mostly fits well, doesn't account for bump around x=2
+
+#final model 
+model_pca_skew <- brm(mean_gi ~ PC1 + PC3 + PC6,  # only significant PCs
+                   data = pc_data,
+                   family = skew_normal(), #changed to skew_normal
+                   prior = priors,
+                   chains = 4, iter = 4000, warmup = 2000,
+                   cores = 4)
+summary(model_pca_skew) #again, PC1, PC3, and PC6 are significant! 
+
+#quick check to make sure skew_normal() is a better fit than gaussian()
+pp_check(model_pca_skew)
+
+loo_gaussian <- loo(model_pca)
+loo_skew <- loo(model_pca_skew, reloo = TRUE)
+loo_compare(loo_gaussian, loo_skew)
+
+#what predictors are included in PC1, PC3, and PC6?
+for(pc in c("PC1","PC3","PC6")) { #starts a for loop 
+  cat("\n---", pc, "---\n") #syntax for output: headers for each PC
+  cat("TOP POSITIVE:\n") #syntax for output: label for the variables with  largest positive loadings for the current PC
+  print(head(sort(pca$rotation[,pc], decreasing = TRUE), 5)) #sorts loadings from largest to smallest, keeps top 5 variables 
+  cat("TOP NEGATIVE:\n") #syntax for output: label for the variables with  largest negative loadings for the current PC
+  print(head(sort(pca$rotation[,pc], decreasing = FALSE), 5))} #sorts loadings from largest to smallest, keeps top 5 variables 
+```
+
+interpret graph (posterior distributions)
+
+```{r}
+#density curves of each PC showing posterior distributions 
+mcmc_areas(model_pca_skew,
+           pars = vars(starts_with("b_"), -b_Intercept), #plot regression coefficients and exclude intercept 
+           prob = 0.95, #shade the 95% credible interval 
+           prob_outer = 1.0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") + #dotted line at x=0 for visual assessment 
+  theme_classic()
+```
+
+explain predicted vs observation plot
+
+```{r}
+pc_data$fitted <- fitted(model_pca_skew)[, "Estimate"] #posterior mean prediction for each observation
+pc_data$lower  <- fitted(model_pca_skew)[, "Q2.5"] #lower 95% credible interval
+pc_data$upper  <- fitted(model_pca_skew)[, "Q97.5"] #upper 95% credible interval
+
+#plot observed vs predicted to see how well the three ecologically meaningful PCs predict gonad index
+ggplot(pc_data, aes(x = fitted/100, y = mean_gi/100)) + #turn units to %
+  geom_point(color = "#466995") + #each dot is one observation 
+  geom_errorbarh(aes(xmin = lower, xmax = upper), alpha = 0.2, size = 0.3) + #horizontal error bars showing prediction uncertainty
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") + #prediction line 
+  labs(x = "Predicted Mean GI (%)", y = "Observed Mean GI (%)") +
+  scale_x_continuous(limits = c(0,0.15)) +
+  scale_y_continuous(limits = c(0,0.2)) +
+  theme_classic()
+```
+
+```{r}
+#plotting 
+fviz_pca_var(
+  pca,
+  col.var = var_colors,      # discrete values: "Top" vs "Other"
+  repel = TRUE) +
+  scale_color_manual(values = c("Top" = "red", "Other" = "grey70")) +
+  labs(title = "PCA variable plot highlighting top horseshoe predictors")
+
+```
+
+# 4. uhhhh - horseshoe? 
+
+```{r}
+#explain why hand-picking is not as honest than PCA? 
+glm <- glm(mean_gi ~ PC1 + PC3 + PC6, data = pc_data)
+r2(glm)
+
+
+```
