@@ -1,13 +1,16 @@
 ---
 title: "Explanatory Data Analysis"
 author: "Sofia Rivas and Jocelyn Rojas"
-format: pdf
-editor: visual
+format:
+  html:
+    code-overflow: wrap
 ---
 
 # 1. Load Relevant Packages
 
 ```{r}
+#| output: false
+
 library(tidyverse) #data wrangling (includes other packages)
 library(dplyr) #data wrangling 
 library(ggplot2) #plotting
@@ -25,7 +28,15 @@ explain where the data came from and why we select certain columns
 predictors_raw <- readRDS("quad_build3.rds") 
 
 #select relevant columns and delete rows with NA values 
-predictors <- gi_predictors %>% 
+predictors <- predictors_raw %>% 
+   mutate(juveniles = macj + nerj + ptej + lsetj + eisj,
+         n_macro_plants_m2 = n_macro_plants_20m2/20,
+         macro_stipe_density_m2 = macro_stipe_density_20m2/20,
+         adults = (density20m2_ptecal + density20m2_eisarb + density20m2_nerlue + density20m2_lamset)/20,
+         marine_snails = tegula_densitym2 + pomaulax_densitym2,
+         density_cancer = density20m2_cancer_spp/20,
+         density_lamstump = density20m2_lamstump/20,
+         density_macstump = density20m2_macstump/20) %>% 
   dplyr::select(mean_gi, n_macro_plants_m2, macro_stipe_density_m2, adults, juveniles, density_cancer, density_lamstump, density_macstump, relief_cm, risk_index, purple_urchin_densitym2, purple_urchin_conceiledm2, red_urchin_densitym2, red_urchin_conceiledm2, marine_snails, lamr, macr, cov_crustose_coralline, cov_desmarestia_spp, cov_lam_holdfast_live, cov_articulated_coralline, cov_fleshy_red, cov_bare_rock, cov_green_algae, cov_barnacle, cov_bare_sand, cov_colonial_tunicate, cov_dictyota_dictyopteris, cov_sponge, cov_dead_kelp_holdfast_any, cov_mac_holdfast_live, cov_red_turf_2_cm, cov_corynactis_californica, cov_dictyoneurum_spp) %>% 
   na.omit()
 
@@ -83,7 +94,7 @@ pp_check(model_pca) #mostly fits well, doesn't account for bump around x=2
 model_pca_skew <- brm(mean_gi ~ PC1 + PC3 + PC6,  # only significant PCs
                    data = pc_data,
                    family = skew_normal(), #changed to skew_normal
-                   prior = priors,
+                   prior = priors_pca,
                    chains = 4, iter = 4000, warmup = 2000,
                    cores = 4)
 summary(model_pca_skew) #again, PC1, PC3, and PC6 are significant! 
@@ -136,12 +147,19 @@ ggplot(pc_data, aes(x = fitted/100, y = mean_gi/100)) + #turn units to %
 
 ```{r}
 #plotting 
+
+
+
+
 fviz_pca_var(
   pca,
-  col.var = var_colors,      # discrete values: "Top" vs "Other"
-  repel = TRUE) +
-  scale_color_manual(values = c("Top" = "red", "Other" = "grey70")) +
-  labs(title = "PCA variable plot highlighting top horseshoe predictors")
+  col.var = "contrib",  # color by contribution to the PC axes
+  repel = TRUE,
+  gradient.cols = c("grey80", "steelblue", "darkblue")
+) +
+  labs(title = "PCA variable plot")
+
+
 
 ```
 
@@ -150,7 +168,7 @@ fviz_pca_var(
 ```{r}
 #explain why hand-picking is not as honest than PCA? 
 glm <- glm(mean_gi ~ PC1 + PC3 + PC6, data = pc_data)
-r2(glm)
+
 
 
 ```
