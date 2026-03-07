@@ -7,6 +7,7 @@ m1 <- glm(mean_gi ~ mean_gonad_mass_g +
             purple_urchin_densitym2 + 
             juveniles
           , data = gi_predictors, family = gaussian)
+
 summary(m1) #AIC: 384.43
 r2(m1) #0.599
 
@@ -22,6 +23,7 @@ m2 <- glm(mean_gi ~ mean_gonad_mass_g +
           , data = gi_predictors, family = gaussian)
 summary(m2) #AIC: 375.79
 r2(m2) #0.674
+
 AIC.m2 <- stepAIC(m2,
                   direction = "both", 
                   trace = TRUE)
@@ -201,7 +203,6 @@ for(pc in c("PC1","PC3","PC5","PC6","PC8")) {
 
 library(corrplot)
 corrplot(cor(gi_predictors %>% dplyr::select(where(is.numeric)), use = "complete.obs"))
-
 
 install.packages("factoextra")
 library(factoextra)
