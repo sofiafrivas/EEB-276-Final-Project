@@ -5,7 +5,7 @@ editor: visual
 authors: Sofia Rivas & Jocelyn Rojas
 ---
 
-## Project Title
+## Environmental Drivers of Purple Urchin Gonad Condition
 
 ### Project Overview
 
@@ -27,10 +27,210 @@ Recovery and restoration practitioners and researchers
 
 # Loading Relevant Packages
 
+require(librarian)
+librarian::shelf(tidyverse, here, janitor, googlesheets4, lubridate, splitstackshape,
+                 dplyr,ggplot2,pwr2,tidyr, broom, ggpubr, paletteer, performance)
+
 ```
 
 #### Data Wrangling
 
 ```{r}
-# Loading Data 
+## Loading Relevant Packages
+
+# Don't run these two lines ----
+load(file.path("/Volumes/enhydra/data/students/sofia/zone_level_data.rda"))
+saveRDS(quad_build3, file = "quad_build3.rds")
+
+gonadindex_raw <- readRDS("quad_build3.rds")
+## write.csv(gonadindex_raw, "gonadindex_raw.csv", row.names = FALSE)
+
+## Cleaning the data ----
+
+# New data table is gi_predictors
+gi_predictors <- gonadindex_raw %>%
+  # Grouping site details into one variable called "site_id"
+  mutate(site_id = paste(site, pred_patch, zone, year, sep = " ")) %>%
+  # Removing listed variables from the tibble
+  select(-c(patch_id, latitude, longitude, survey_date, site, site_type, patch_cat, 
+            zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
+  # Grouping all juvenile kelp data into one variable called "juveniles"
+  mutate(juveniles = macj + nerj + ptej + lsetj + eisj) %>% 
+  # Changing area data to 1 m2
+  mutate (n_macro_plants_m2 = n_macro_plants_20m2/20)
+```
+
+#### GLM Model Testing
+
+We received guidance from Sofia's academic advisor, \_\_\_\_, to determine the type of model that would be most appropriate for answering our research question. He suggested we run a Generalized Linear Model (glm). Our data frame contained over 70 predictor variables so we brainstormed variable combinations when writing out our models.
+
+After running each model, we used the summary() and r2() functions to determine the AIC and r2 values. We were advised to play close attention to each model's r squared value.
+
+```{r}
+# We named our first model m1 and included the following predictor variables: total_biomass_g, purple_urchin_densitym2 + juveniles
+
+m1 <- glm(mean_gi ~ mean_gonad_mass_g +
+            total_biomass_g +
+            purple_urchin_densitym2 + 
+            juveniles,
+          data = gi_predictors, family = gaussian)
+
+# Generating Model Summary and R^2
+summary(m1) # AIC: 384.43
+r2(m1) # 0.599
+
+# Second model (m2) with the following predictor variables: mean_gonad_mass_g, total_biomass_g, purple_urchin_densitym2, juveniles, macr, cov_crustose_coralline, cov_mac_holdfast_live, lamr, n_macro_plants_m2
+
+m2 <- glm(mean_gi ~ mean_gonad_mass_g +
+            total_biomass_g +
+            purple_urchin_densitym2 + 
+            juveniles + 
+            macr + 
+            cov_crustose_coralline + 
+            cov_mac_holdfast_live +
+            lamr +
+            n_macro_plants_m2 
+          , data = gi_predictors, family = gaussian)
+
+# Generating Model Summary and R^2
+summary(m2) # AIC: 375.79
+r2(m2) # 0.674
+
+# Third model (m3) with the following predictor variables:mean_gonad_mass_g, total_biomass_g, purple_urchin_densitym2, juveniles, lamr, n_macro_plants_m2
+
+m3 <- glm(mean_gi ~ mean_gonad_mass_g + 
+            total_biomass_g + 
+            purple_urchin_densitym2 + 
+            juveniles + 
+            lamr + 
+            n_macro_plants_m2
+          , data = gi_predictors, family = gaussian)
+
+## After running the first and second models, we realized that our mean_gi variable included "mean_gonad_mass_g" and "total_biomass_g" in its calculation so we decided to remove them from the rest of our exploratory models
+
+# Generating Model Summary and R^2
+summary(m3) # AIC: 371.21
+r2(m3) # 0.668
+
+# Fourth model (m4) with the following predictor variables: purple_urchin_densitym2 + #ecological drivers only juveniles, lamr, n_macro_plants_m2, macr, cov_mac_holdfast_live,  cov_crustose_coralline
+
+m4 <- glm(mean_gi ~ purple_urchin_densitym2 + 
+            juveniles +
+            lamr +
+            n_macro_plants_m2 +
+            macr +
+            cov_mac_holdfast_live +
+            cov_crustose_coralline,
+          , data = gi_predictors, family = gaussian)
+
+# Generating Model Summary and R^2
+summary(m4) # AIC: 421.07
+r2(m4) # 0.436
+
+# Fifth model (m5) with the following predictor variables: purple_urchin_densitym2, lamr, n_macro_plants_m2, macr, adults
+
+m5 <- glm(mean_gi ~ purple_urchin_densitym2 +
+            lamr +
+            n_macro_plants_m2 +
+            macr +
+            adults 
+          , family = gaussian, data = gi_predictors)
+
+# Generating Model Summary and R^2
+summary(m5) # AIC: 413.67
+r2(m5) # 0.457
+
+# We used the StepAIC function to test variations of each of our exploratory models if they were to not include all of our listed variables.
+
+# AIC Model 1
+AIC.m1 <- stepAIC(m1,
+                  direction = "both", 
+                  trace = TRUE)
+# AIC Model 2
+AIC.m2 <- stepAIC(m2,
+                  direction = "both", 
+                  trace = TRUE)
+# AIC Model 3
+AIC.m3 <- stepAIC(m3,
+                  direction = "both", 
+                  trace = TRUE)
+# AIC Model 4
+AIC.m4 <- stepAIC(m4,
+                  direction = "both", 
+                  trace = TRUE)
+# AIC Model 5
+AIC.m5 <- stepAIC(m5,
+                  direction = "both", 
+                  trace = TRUE)
+```
+
+We continued to run similar models with different combinations of predictors but the five that are included above had the highest r2 values. However, the highest r2 of all our exploratory models was only 0.674. We determined a glm may not be the best model for our data and decided to start over by plotting the distribution of our variable of interest: mean_gi
+
+#### Distribution Testing
+
+We wanted to check in our data was followed a Gaussian distribution so we ran the following lines of code.
+
+```{r}
+# Plotting the distribution of "mean_gi" data
+hist(gi_predictors_2$mean_gi)
+
+# Produces a Q-Q plot to assess whether the data follows a normal distribution
+# If data (more or less) follows a straight line, it is normally distributed
+qqnorm(gi_predictors_2$mean_gi)
+
+# Adds a line to Q-Q plot
+qqline(gi_predictors_2$mean_gi)
+
+```
+
+Because our data was normally distributed, we decided to run a Bayesian alterntive to Linear Mixed Effects Models using the brms package. Our data was collected from different sites and within each site, sampling took place across various site types.
+
+Site (Location) –\> Site Type (Kelp forest, Urchin Barren, and Intermediate Zone) –\> Site Depth (Shallow/Deep)
+
+#### Bayesian Model Testing 
+
+```{r}
+
+# Our first exploratory Bayseian model included the density of two different species of kelp (major purple urchin food source), site type, and site location as a random effect
+
+mean_gi_model <- brm (data = gi_predictors,
+             family = gaussian(),
+             mean_gi ~ 0 + lamr + macr + site_type + (1 | site),
+             iter = 2000, warmup = 1000, chains = 4, cores = 4, 
+             seed = 4, 
+             file = "output/mean_gi_model")
+
+# We used the summary() and plot() function to check the Rhat values, confidence intervals, and chains. 
+summary(mean_gi_model)
+plot(mean_gi_model)
+```
+
+Our Rhat values were 1, our confidence intervals did not include zero, the plots all centered around a single point, and our chains overlapped. However, our data frame included over 70 predictor variables. We realized we needed a way to determine what variables were the best to include in our final model.
+
+After consulting with other students, we learned about Principal Component Analysis, a statistical method used to identify the most predictive variables in a complex data set.
+
+#### Principal Component Analysis Testing
+
+```{r}
+# To run a PCA, we needed to make all of our values numeric
+# We created a new data frame called gi_numeric to keep the other values as they were
+
+gi_numeric <- gi_predictors %>%
+  dplyr::select(where(is.numeric)) %>%
+  na.omit()
+
+# PCA ATTEMPT 1 
+pca <- prcomp(gi_numeric %>% dplyr::select(-mean_gi), 
+              scale. = TRUE) 
+
+# To determine the number of PCAs we needed to run, we used the "factoextra" package and fviz_eig function to plot a scree plot. The scree plot is a line graph used in PCA to determine how many factors to retain.
+
+library(factoextra)
+fviz_eig(pca) # Function to plot a scree plot
+
+pc_scores <- as.data.frame(pca$x[, 1:7]) #number based on scree plot
+
+pc_data <- pc_scores %>%
+  mutate(mean_gi = gi_numeric$mean_gi)  # add response variable back
+
 ```
