@@ -60,6 +60,7 @@ pc_scores <- as.data.frame(pca$x[, 1:4])
 pc_data <- pc_scores %>%
   mutate(mean_gi = predictors_simple$mean_gi)
 
+<<<<<<< HEAD
 summary(pca)$importance[3,] 
 
 pc_scores1 <- as.data.frame(pca$x[, 1:12])
@@ -115,6 +116,13 @@ fviz_pca_var(
 
 
 
+=======
+<<<<<<< HEAD
+install.packages("factoextra")
+library(factoextra)
+
+=======
+>>>>>>> 87668a53b6e55ea1803f0befb71e9106d734bad2
 #setting priors 
 priors_pca <- c(
   prior(normal(0, 1), class = "b"),
@@ -123,6 +131,7 @@ priors_pca <- c(
 
 #scree plot
 library(factoextra)
+>>>>>>> 725e90424ac751b01807966226641092588c17d1
 fviz_eig(pca)
 plot(pca, type = "l")
 
