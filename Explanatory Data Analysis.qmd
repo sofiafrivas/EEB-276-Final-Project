@@ -1,9 +1,8 @@
 ---
 title: "Explanatory Data Analysis"
 author: "Sofia Rivas and Jocelyn Rojas"
-format:
-  html:
-    code-overflow: wrap
+format: pdf
+editor: visual
 ---
 
 # 1. Load Relevant Packages
@@ -17,6 +16,8 @@ library(ggplot2) #plotting
 library(brms) #Bayesian statistics 
 library(bayesplot) #posterior probability distributions 
 library(factoextra) #variance plot (scree plot)
+library(tidybayes) #helps convert Bayesian modeling for ggplot2 and tidyverse
+library(patchwork) #put plots together
 ```
 
 # 2. Data Wrangling
@@ -37,10 +38,13 @@ predictors <- predictors_raw %>%
          density_cancer = density20m2_cancer_spp/20,
          density_lamstump = density20m2_lamstump/20,
          density_macstump = density20m2_macstump/20) %>% 
-  dplyr::select(mean_gi, n_macro_plants_m2, macro_stipe_density_m2, adults, juveniles, density_cancer, density_lamstump, density_macstump, relief_cm, risk_index, purple_urchin_densitym2, purple_urchin_conceiledm2, red_urchin_densitym2, red_urchin_conceiledm2, marine_snails, lamr, macr, cov_crustose_coralline, cov_desmarestia_spp, cov_lam_holdfast_live, cov_articulated_coralline, cov_fleshy_red, cov_bare_rock, cov_green_algae, cov_barnacle, cov_bare_sand, cov_colonial_tunicate, cov_dictyota_dictyopteris, cov_sponge, cov_dead_kelp_holdfast_any, cov_mac_holdfast_live, cov_red_turf_2_cm, cov_corynactis_californica, cov_dictyoneurum_spp) %>% 
+  dplyr::select(mean_gi, n_macro_plants_m2, macro_stipe_density_m2, adults,
+juveniles, density_cancer, density_lamstump, density_macstump, relief_cm, risk_index, purple_urchin_densitym2, purple_urchin_conceiledm2, red_urchin_densitym2, red_urchin_conceiledm2, marine_snails, lamr, macr, cov_crustose_coralline, cov_desmarestia_spp, cov_lam_holdfast_live, cov_articulated_coralline, cov_fleshy_red, cov_bare_rock, cov_green_algae, cov_barnacle, cov_bare_sand, cov_colonial_tunicate, cov_dictyota_dictyopteris, cov_sponge, cov_dead_kelp_holdfast_any, cov_mac_holdfast_live, cov_red_turf_2_cm, cov_corynactis_californica, cov_dictyoneurum_spp) %>% 
   na.omit()
 
-
+predictors2 <- predictors %>%
+  dplyr::select(mean_gi, cov_mac_holdfast_live, macro_stipe_density_m2, n_macro_plants_m2, cov_bare_sand, purple_urchin_conceiledm2, cov_crustose_coralline, purple_urchin_densitym2, relief_cm, marine_snails, red_urchin_densitym2, cov_corynactis_californica, cov_barnacle, cov_articulated_coralline, cov_desmarestia_spp, cov_colonial_tunicate, density_lamstump, cov_dead_kelp_holdfast_any, cov_dictyoneurum_spp, red_urchin_conceiledm2)
+  
 ```
 
 # 3. Principal Component Analysis
@@ -98,6 +102,7 @@ model_pca_skew <- brm(mean_gi ~ PC1 + PC3 + PC6,  # only significant PCs
                    chains = 4, iter = 4000, warmup = 2000,
                    cores = 4)
 summary(model_pca_skew) #again, PC1, PC3, and PC6 are significant! 
+bayes_R2(model_pca_skew) #check R^2
 
 #quick check to make sure skew_normal() is a better fit than gaussian()
 pp_check(model_pca_skew)
@@ -147,10 +152,6 @@ ggplot(pc_data, aes(x = fitted/100, y = mean_gi/100)) + #turn units to %
 
 ```{r}
 #plotting 
-
-
-
-
 fviz_pca_var(
   pca,
   col.var = "contrib",  # color by contribution to the PC axes
@@ -160,14 +161,257 @@ fviz_pca_var(
   labs(title = "PCA variable plot")
 
 
+fviz_pca_var(pca, axes = c(1, 3),
+             col.var = "contrib",
+             repel = TRUE,
+             gradient.cols = c("grey80", "steelblue", "darkblue")) +
+  labs(title = "PCA variable plot - PC1 vs PC3")
+
+# PC1 vs PC6
+fviz_pca_var(pca, axes = c(1, 6),
+             col.var = "contrib",
+             repel = TRUE,
+             gradient.cols = c("grey80", "steelblue", "darkblue")) +
+  labs(title = "PCA variable plot - PC1 vs PC6")
+
+# PC3 vs PC6
+fviz_pca_var(pca, axes = c(3, 6),
+             col.var = "contrib",
+             repel = TRUE,
+             gradient.cols = c("grey80", "steelblue", "darkblue")) +
+  labs(title = "PCA variable plot - PC3 vs PC6")
+
+
+#add individual plots for each variable  
+```
+
+# 3. Principal Component Analysis (the real one) 
+
+-   Explain why we chose PCA
+
+## Step 1: PCA
+
+```{r}
+#run PCA: run only on predictor variables, not the response variable (mean_gi)
+#standardize variables 
+pca <- prcomp(predictors2 %>% 
+                dplyr::select(-mean_gi), 
+                scale. = TRUE) 
+
+#visualize 
+fviz_eig(pca)
+```
+
+```{r}
+#create matrix of raw PC scores (chosen from scree plot)
+pc_scores <- as.data.frame(pca$x[, 1:10])
+
+#add response variable (mean_gi) into new dataframe
+pc_data <- pc_scores %>%
+              mutate(mean_gi = predictors2$mean_gi)
+
+#set priors for brm 
+priors_pca <- c(
+  prior(normal(0, 1), class = "b"),
+  prior(normal(6.5, 2), class = "Intercept"), #mean mean_gi is ~6.5
+  prior(student_t(3, 0, 2), class = "sigma"))
+
+#run brm model
+model_pca <- brm(mean_gi ~ .,
+                 data = pc_data,
+                 family = gaussian(),
+                 prior = priors_pca,
+                 chains = 4, iter = 4000, warmup = 2000,
+                 cores = 4)
+summary(model_pca) #PC1, PC3, and PC6 are significant!
+```
+
+explain why we switch to skew_normal family (include pp_checks and loos)
+
+```{r}
+#posterior predictive check 
+pp_check(model_pca) #mostly fits well, doesn't account for bump around x=2
+model_pca_gaus <- brm(mean_gi ~ PC1 + PC2 + PC3,
+                                  data = pc_data,
+                                  family = gaussian(),
+                                  prior = priors_pca,
+                                  chains = 4, iter = 4000, warmup = 2000,
+                                  cores = 4)
+pp_check(model_pca_gaus)
+
+#final model 
+model_pca_skew <- brm(mean_gi ~ PC1 + PC2 + PC3,  # only significant PCs
+                   data = pc_data,
+                   family = skew_normal(), #changed to skew_normal
+                   prior = priors_pca,
+                   chains = 4, iter = 4000, warmup = 2000,
+                   cores = 4)
+summary(model_pca_skew) #again, PC1, PC2, and PC3 are significant! 
+bayes_R2(model_pca_skew) #check R^2
+
+#quick check to make sure skew_normal() is a better fit than gaussian()
+pp_check(model_pca_skew)
+
+loo_gaussian <- loo(model_pca_gaus, moment_match = TRUE)
+loo_skew <- loo(model_pca_skew, reloo = TRUE)
+loo_compare(loo_gaussian, loo_skew)
+
+
+model_pca_gaus$formula       # check gaussian model formula
+model_pca_skew$formula  # check skew_normal model formula
+
+#what predictors are included in PC1, PC3, and PC6?
+for(pc in c("PC1","PC2","PC3")) { #starts a for loop 
+  cat("\n---", pc, "---\n") #syntax for output: headers for each PC
+  cat("TOP POSITIVE:\n") #syntax for output: label for the variables with  largest positive loadings for the current PC
+  print(head(sort(pca$rotation[,pc], decreasing = TRUE), 5)) #sorts loadings from largest to smallest, keeps top 5 variables 
+  cat("TOP NEGATIVE:\n") #syntax for output: label for the variables with  largest negative loadings for the current PC
+  print(head(sort(pca$rotation[,pc], decreasing = FALSE), 5))} #sorts loadings from largest to smallest, keeps top 5 variables 
+```
+
+interpret graph (posterior distributions)
+
+```{r}
+#density curves of each PC showing posterior distributions 
+mcmc_areas(model_pca_skew,
+           pars = vars(starts_with("b_"), -b_Intercept), #plot regression coefficients and exclude intercept 
+           prob = 0.95, #shade the 95% credible interval 
+           prob_outer = 1.0) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") + #dotted line at x=0 for visual assessment 
+  theme_classic()
 
 ```
 
-# 4. uhhhh - horseshoe? 
+explain predicted vs observation plot
 
 ```{r}
-#explain why hand-picking is not as honest than PCA? 
+pc_data$fitted <- fitted(model_pca_skew)[, "Estimate"] #posterior mean prediction for each observation
+pc_data$lower  <- fitted(model_pca_skew)[, "Q2.5"] #lower 95% credible interval
+pc_data$upper  <- fitted(model_pca_skew)[, "Q97.5"] #upper 95% credible interval
+
+#plot observed vs predicted to see how well the three ecologically meaningful PCs predict gonad index
+ggplot(pc_data, aes(x = fitted/100, y = mean_gi/100)) + #turn units to %
+  geom_point(color = "#466995") + #each dot is one observation 
+  geom_errorbarh(aes(xmin = lower/100, xmax = upper/100), 
+                 alpha = 0.2, 
+                 linewidth = 0.3) + #horizontal error bars showing prediction uncertainty
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") + #prediction line 
+  labs(x = "Predicted Mean GI (%)", y = "Observed Mean GI (%)") +
+  scale_x_continuous(limits = c(0,0.15)) +
+  scale_y_continuous(limits = c(0,0.2)) +
+  theme_classic()
+```
+
+```{r}
+
+summary(pca)$importance[2, 1:3] * 100 # % variance for each PC
+
+#plotting PC1 and PC2
+fviz_pca_var(pca, axes = c(1, 2),#specify which PCs to plot
+             select.var = list(contrib = 8),  #only top # contributors
+             col.var = "contrib",
+             repel = TRUE,
+               labelsize = 2,
+             gradient.cols = c("grey80", "steelblue", "darkblue")) +
+  labs(title = "PCA variable plot: PC1 and PC2",
+       x = "PC1 (22.7%)",
+       y = "PC2 (11.9%)",
+       color = "Contribution (%)")+
+  theme_classic()
+
+#add individual plots for each PC  
+# Plot for PC1
+p1 <- pc_data %>%
+  ggplot(aes(x = PC1, y = mean_gi)) +
+  stat_smooth(method = "lm", color = "steelblue", fill = "lightblue") +
+  geom_point(color = "#466995", alpha = 0.6) +
+  labs(x = "PC1 (kelp forest structure)", 
+       y = "Mean GI (%)") +
+  theme_classic()
+
+# Plot for PC2
+p2 <- pc_data %>%
+  ggplot(aes(x = PC2, y = mean_gi)) +
+  stat_smooth(method = "lm", color = "steelblue", fill = "lightblue") +
+  geom_point(color = "#466995", alpha = 0.6) +
+  labs(x = "PC2 (urchin barren vs coralline habitat)", 
+       y = "Mean GI (%)") +
+  theme_classic()
+
+# Plot for PC3
+p3 <- pc_data %>%
+  ggplot(aes(x = PC3, y = mean_gi)) +
+  stat_smooth(method = "lm", color = "steelblue", fill = "lightblue") +
+  geom_point(color = "#466995", alpha = 0.6) +
+  labs(x = "PC3 (algal diversity vs urchin aggregation)", 
+       y = "Mean GI (%)") +
+  theme_classic()
+
+# Combine all three
+p1 + p2 + p3
+
+```
+
+# 4. uhhhh - horseshoe?
+
+```{r}
+#explain why hand-picking is not as honest as PCA? 
 glm <- glm(mean_gi ~ PC1 + PC3 + PC6, data = pc_data)
+
+
+#HORSESHOE 
+
+#scale predictors 
+predictors_scaled <- predictors %>%
+  mutate(across(-mean_gi, scale))
+
+#model with horseshoe instead of pca 
+brm_hs <- brm(
+  mean_gi ~ .,
+  data = predictors_scaled,
+  prior = prior(horseshoe(1), class = "b"),
+  control = list(adapt_delta = 0.99))
+
+summary(brm_hs)
+
+#select only significant variables
+significant_vars <- c("b_adults", 
+                      "b_purple_urchin_densitym2",
+                      "b_purple_urchin_conceiledm2") 
+mcmc_areas(brm_hs,
+           pars = significant_vars,
+           prob = 0.95) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  theme_classic()
+
+
+
+
+fixef(brm_hs)
+
+pp_check(brm_hs, pars = significant_vars)
+
+conditional_effects(brm_hs)
+bayes_R2(brm_hs, pars = significant_vars)
+library(bayesplot)
+posterior <- as_draws_df(brm_hs)
+coef_cols <- grep("^b_", colnames(posterior), value = TRUE)
+coef_cols <- coef_cols[coef_cols != "b_Intercept"]  # remove intercept
+mcmc_intervals(posterior, pars = coef_cols)
+coef_summary <- posterior %>%
+  summarise(across(all_of(coef_cols), ~ median(.))) %>%
+  pivot_longer(everything(), names_to = "predictor", values_to = "median")
+top_predictors <- coef_summary %>%
+  filter(abs(median) > 0.05) %>%  # threshold can be adjusted
+  pull(predictor) %>%
+  gsub("^b_", "", .)  # remove b_ prefix to match PCA loadings
+loadings <- as.data.frame(pca$rotation)
+top_loadings <- loadings[top_predictors, 1:4]  # first 4 PCs
+top_loadings$predictor <- rownames(top_loadings)
+top_loadings
+long_loadings <- top_loadings %>%
+  pivot_longer(cols = starts_with("PC"), names_to = "PC", values_to = "loading")
+
 
 
 

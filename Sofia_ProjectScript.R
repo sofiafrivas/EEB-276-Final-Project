@@ -60,7 +60,7 @@ pc_scores <- as.data.frame(pca$x[, 1:4])
 pc_data <- pc_scores %>%
   mutate(mean_gi = predictors_simple$mean_gi)
 
-<<<<<<< HEAD
+
 summary(pca)$importance[3,] 
 
 pc_scores1 <- as.data.frame(pca$x[, 1:12])
@@ -116,13 +116,11 @@ fviz_pca_var(
 
 
 
-=======
-<<<<<<< HEAD
+
 install.packages("factoextra")
 library(factoextra)
 
-=======
->>>>>>> 87668a53b6e55ea1803f0befb71e9106d734bad2
+
 #setting priors 
 priors_pca <- c(
   prior(normal(0, 1), class = "b"),
@@ -131,7 +129,6 @@ priors_pca <- c(
 
 #scree plot
 library(factoextra)
->>>>>>> 725e90424ac751b01807966226641092588c17d1
 fviz_eig(pca)
 plot(pca, type = "l")
 
@@ -175,7 +172,7 @@ long_loadings <- top_loadings %>%
 long_loadings <- long_loadings %>%
   left_join(coef_summary %>% mutate(predictor = gsub("^b_", "", predictor)), by = "predictor")
 
-# Plot
+# nope
 ggplot(long_loadings, aes(x = PC, y = loading, fill = median)) +
   geom_bar(stat = "identity") +
   facet_wrap(~predictor, scales = "free_y") +
@@ -188,15 +185,40 @@ ggplot(long_loadings, aes(x = PC, y = loading, fill = median)) +
   )
 
 
+#finding r2 from only significant horseshoe variables
+sig_vars <- posterior_summary(brm_hs) %>%
+  as.data.frame() %>%
+  rownames_to_column("parameter") %>%
+  filter(grepl("^b_", parameter),
+         parameter != "b_Intercept") %>%
+  filter(Q2.5 > 0 | Q97.5 < 0) %>%
+  pull(parameter) %>%
+  gsub("^b_", "", .)
+# Build formula dynamically
+sig_formula <- as.formula(paste("mean_gi ~", paste(sig_vars, collapse = " + ")))
+
+model_hs_reduced <- brm(sig_formula,
+                        data = predictors_scaled,
+                        family = gaussian(),
+                        prior = c(
+                          prior(normal(0, 1), class = "b"),
+                          prior(normal(6.5, 2), class = "Intercept"),
+                          prior(student_t(3, 0, 2), class = "sigma")
+                        ),
+                        chains = 4, iter = 4000, warmup = 2000,
+                        cores = 4)
+bayes_R2(model_hs_reduced)
+loo_hs_reduced <- loo(model_hs_reduced)
+loo_compare(loo_skew, loo_hs_reduced)
 
 
 
-
-
-
-
-
-
+fviz_pca_var(
+  pca,
+  col.var = var_colors,      # discrete values: "Top" vs "Other"
+  repel = TRUE) +
+  scale_color_manual(values = c("Top" = "red", "Other" = "grey70")) +
+  labs(title = "PCA variable plot highlighting top horseshoe predictors")
 
 
 
@@ -213,3 +235,76 @@ r2(glm_pca)
 
 glm(mean_gi ~ PC1 + PC2 + PC3 + PC4, data = pc_data)
 brm(mean_gi ~ PC1 + PC2 + PC3 + PC4, data = pc_data)
+
+
+# predictors 2.0  ---------------------------------------------------------
+
+predictors2 <- predictors %>%
+  dplyr::select(mean_gi, cov_mac_holdfast_live, macro_stipe_density_m2, n_macro_plants_m2, cov_bare_sand, purple_urchin_conceiledm2, cov_crustose_coralline, purple_urchin_densitym2, relief_cm, marine_snails, red_urchin_densitym2, cov_corynactis_californica, cov_barnacle, cov_articulated_coralline, cov_desmarestia_spp, cov_colonial_tunicate, density_lamstump, cov_dead_kelp_holdfast_any, cov_dictyoneurum_spp, red_urchin_conceiledm2)
+
+pca2 <- prcomp(predictors2 %>% 
+                dplyr::select(-mean_gi), 
+              scale. = TRUE) 
+
+#visualize 
+fviz_eig(pca2)
+
+pc_scores2 <- as.data.frame(pca2$x[, 1:10])
+
+#add response variable (mean_gi) into new dataframe
+pc_data2 <- pc_scores2 %>%
+  mutate(mean_gi = predictors2$mean_gi)
+
+#set priors for brm 
+priors_pca2 <- c(
+  prior(normal(0, 1), class = "b"),
+  prior(normal(6.5, 2), class = "Intercept"), #mean mean_gi is ~6.5
+  prior(student_t(3, 0, 2), class = "sigma"))
+
+model_pca_skew2 <- brm(mean_gi ~ .,  
+                      data = pc_data2,
+                      family = skew_normal(), 
+                      prior = priors_pca2,
+                      chains = 4, iter = 4000, warmup = 2000,
+                      cores = 4)
+summary(model_pca_skew2)
+fviz_pca_var(
+  pca2,
+  col.var = "contrib",  # color by contribution to the PC axes
+  repel = TRUE,
+  gradient.cols = c("grey80", "steelblue", "darkblue")
+) +
+  labs(title = "PCA variable plot")
+
+fviz_pca_var(pca2, axes = c(1, 3),
+             col.var = "contrib",
+             repel = TRUE,
+             gradient.cols = c("grey80", "steelblue", "darkblue")) +
+  labs(title = "PCA variable plot - PC1 vs PC3")
+
+fviz_pca_var(pca2, axes = c(1, 2),
+             select.var = list(contrib = 10),  # only top 10 contributors
+             col.var = "contrib",
+             repel = TRUE,
+             gradient.cols = c("grey80", "steelblue", "darkblue")) +
+  labs(title = "PCA variable plot")+
+  theme_classic()
+
+fviz_pca_var(pca, axes = c(1, 3),
+             select.var = list(contrib = 10),  # only top 10 contributors
+             col.var = "contrib",
+             repel = TRUE,
+             gradient.cols = c("grey80", "steelblue", "darkblue")) +
+  labs(title = "PCA variable plot - PC1 vs PC3")+
+  theme_classic()
+
+
+for(pc in c("PC1","PC2","PC3")) { #starts a for loop 
+  cat("\n---", pc, "---\n") #syntax for output: headers for each PC
+  cat("TOP POSITIVE:\n") #syntax for output: label for the variables with  largest positive loadings for the current PC
+  print(head(sort(pca2$rotation[,pc], decreasing = TRUE), 5)) #sorts loadings from largest to smallest, keeps top 5 variables 
+  cat("TOP NEGATIVE:\n") #syntax for output: label for the variables with  largest negative loadings for the current PC
+  print(head(sort(pca2$rotation[,pc], decreasing = FALSE), 5))} #sorts loadings from largest to smallest, keeps top 5 variables 
+
+
+p1 + p2 + p3
