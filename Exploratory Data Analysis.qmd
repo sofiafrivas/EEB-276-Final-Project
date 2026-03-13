@@ -26,6 +26,8 @@ Recovery and restoration practitioners and researchers
 
 ```{r}
 # Loading Relevant Packages
+library(MASS)
+library(performance)
 library(tidyverse) #data wrangling (includes other packages)
 library(dplyr) #data wrangling 
 library(ggplot2) #plotting
@@ -49,7 +51,7 @@ gi_predictors <- gonadindex_raw %>%
   # Grouping site details into one variable called "site_id"
   mutate(site_id = paste(site, pred_patch, zone, year, sep = " ")) %>%
   # Removing listed variables from the tibble
-  select(-c(patch_id, latitude, longitude, survey_date, site, site_type, patch_cat, 
+  select(-c(patch_id, latitude, longitude, survey_date, patch_cat, 
             zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
   # Grouping all juvenile kelp data into one variable called "juveniles"
   mutate(juveniles = macj + nerj + ptej + lsetj + eisj,
@@ -170,16 +172,16 @@ We wanted to check if our data was followed a Gaussian distribution so we ran th
 
 ```{r}
 # Plotting the distribution of "mean_gi" data
-hist(gi_predictors_2$mean_gi)
+hist(gi_predictors$mean_gi)
 ```
 
 ```{r}
 # Produces a Q-Q plot to assess whether the data follows a normal distribution
 # If data (more or less) follows a straight line, it is normally distributed
-qqnorm(gi_predictors_2$mean_gi)
+qqnorm(gi_predictors$mean_gi)
 
 # Adds a line to Q-Q plot
-qqline(gi_predictors_2$mean_gi)
+qqline(gi_predictors$mean_gi)
 ```
 
 Our data was normally distributed with a slight right skew, so we decided to run a Bayesian alternative to a Linear Mixed Effects Model using the **brms** package. Our data was collected from different sites and within each site, sampling took place across various site types.
@@ -199,7 +201,7 @@ mean_gi_model <- brm (data = gi_predictors,
              mean_gi ~ 0 + lamr + macr + site_type + (1 | site),
              iter = 2000, warmup = 1000, chains = 4, cores = 4, 
              seed = 4, 
-             file = "output/mean_gi_model")
+             file = "mean_gi_model")
 
 # We used the summary() and plot() function to check: 
   # Rhat values, confidence intervals, and chains. 
