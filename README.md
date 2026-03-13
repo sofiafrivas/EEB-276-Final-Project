@@ -4,7 +4,7 @@
 
 ![](images/clipboard-13658835.png)
 
-Photo by Michael Langhans
+###### Photo by Michael Langhans 
 
 ### Project Overview
 
@@ -18,4 +18,4 @@ To what extent do biological and environmental variables predict **sea urchin go
 
 Kelp forest recovery researchers and restoration practitioners
 
-##### *Please refer to the "Explanatory Data Analysis" file for an in-depth summary of this project (in its final form), including background information, methods, analyses, and conclusions.* To learn more about our exploration of the data, specifically methods we tried out and did not include in our final analyses, refer to the "Exploratory Data Analysis" file. 
+### *Please refer to the "Explanatory Data Analysis" file for an in-depth summary of this project (in its final form), including background information, methods, analyses, and conclusions. To learn more about our exploration of the data, specifically methods we tried out and did not include in our final analyses, refer to the "Exploratory Data Analysis" file.* 
