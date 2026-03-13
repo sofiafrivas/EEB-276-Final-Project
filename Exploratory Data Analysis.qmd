@@ -26,20 +26,19 @@ Recovery and restoration practitioners and researchers
 
 ```{r}
 # Loading Relevant Packages
-
-require(librarian)
-librarian::shelf(tidyverse, here, janitor, googlesheets4, lubridate, splitstackshape,
-                 dplyr,ggplot2,pwr2,tidyr, broom, ggpubr, paletteer, performance)
-
+library(tidyverse) #data wrangling (includes other packages)
+library(dplyr) #data wrangling 
+library(ggplot2) #plotting
+library(brms) #Bayesian statistics 
+library(bayesplot) #posterior probability distributions 
+library(factoextra) #variance plot (scree plot)
+library(tidybayes) #helps convert Bayesian modeling for ggplot2 and tidyverse
+library(patchwork) #put plots together
 ```
 
 #### Data Wrangling
 
 ```{r}
-# Don't run these two lines ----
-load(file.path("/Volumes/enhydra/data/students/sofia/zone_level_data.rda"))
-saveRDS(quad_build3, file = "quad_build3.rds")
-
 gonadindex_raw <- readRDS("quad_build3.rds")
 ## write.csv(gonadindex_raw, "gonadindex_raw.csv", row.names = FALSE)
 
@@ -53,7 +52,8 @@ gi_predictors <- gonadindex_raw %>%
   select(-c(patch_id, latitude, longitude, survey_date, site, site_type, patch_cat, 
             zone, year, sd_biomass, sd_gi, se_gonad_mass_g, geometry)) %>% 
   # Grouping all juvenile kelp data into one variable called "juveniles"
-  mutate(juveniles = macj + nerj + ptej + lsetj + eisj) %>% 
+  mutate(juveniles = macj + nerj + ptej + lsetj + eisj,
+         adults = density20m2_ptecal + density20m2_eisarb + density20m2_nerlue) %>% 
   # Changing area data to 1 m2
   mutate (n_macro_plants_m2 = n_macro_plants_20m2/20)
 ```
