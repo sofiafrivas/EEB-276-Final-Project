@@ -1,6 +1,7 @@
 ---
-title: "BIOE 276 - Final Project"
-format: html
+title: "Exploratory Data Analysis"
+subtitle: Environmental Drivers of Purple Urchin Gonad Index in Central California Kelp Forests
+format: pdf
 editor: visual
 authors: Sofia Rivas & Jocelyn Rojas
 ---
@@ -15,16 +16,15 @@ To what extent do biological and environmental variables predict sea urchin gona
 
 #### Background
 
--   Why is this research question important?
+Project background can be found in our "Explanatory Data Analysis" files.
 
 #### Target Audience:
 
 Recovery and restoration practitioners and researchers
 
-### Exploratory Data Analyses
+## Exploratory Data Analyses
 
 ```{r}
-
 # Loading Relevant Packages
 
 require(librarian)
@@ -36,8 +36,6 @@ librarian::shelf(tidyverse, here, janitor, googlesheets4, lubridate, splitstacks
 #### Data Wrangling
 
 ```{r}
-## Loading Relevant Packages
-
 # Don't run these two lines ----
 load(file.path("/Volumes/enhydra/data/students/sofia/zone_level_data.rda"))
 saveRDS(quad_build3, file = "quad_build3.rds")
@@ -140,7 +138,7 @@ m5 <- glm(mean_gi ~ purple_urchin_densitym2 +
 summary(m5) # AIC: 413.67
 r2(m5) # 0.457
 
-# We used the StepAIC function to test variations of each of our exploratory models if they were to not include all of our listed variables.
+# We used the StepAIC function to test variations of each of our exploratory models 
 
 # AIC Model 1
 AIC.m1 <- stepAIC(m1,
@@ -193,6 +191,9 @@ Site (Location) –\> Site Type (Kelp forest, Urchin Barren, and Intermediate Zo
 ```{r}
 # Our first exploratory Bayseian model included the density of two different species of kelp (major purple urchin food source), site type, and site location as a random effect
 
+library(brms)
+
+# BRMS model
 mean_gi_model <- brm (data = gi_predictors,
              family = gaussian(),
              mean_gi ~ 0 + lamr + macr + site_type + (1 | site),
@@ -202,9 +203,6 @@ mean_gi_model <- brm (data = gi_predictors,
 
 # We used the summary() and plot() function to check: 
   # Rhat values, confidence intervals, and chains. 
-
-summary(mean_gi_model)
-plot(mean_gi_model)
 ```
 
 Our Rhat values were 1, our confidence intervals did not include zero, the plots all centered around a single point, and our chains overlapped. However, our data frame included over 70 predictor variables. We realized we needed a way to determine what variables were the best to include in our final model.
@@ -237,7 +235,33 @@ pc_scores <- as.data.frame(pca$x[, 1:7])
 pc_data <- pc_scores %>%
   mutate(mean_gi = gi_numeric$mean_gi)
 
-# Evaluates the
-pp_check(model_prior)  # should look like plausible mean_gi values
-
 ```
+
+#### Bayesian Model Testing 2
+
+```{r}
+# After running our PCA, we rewrote our BRMS model so it included our PC scores
+
+# Priors
+priors <- c(
+  prior(normal(0, 1), class = "b"),
+  prior(normal(6.5, 2), class = "Intercept"),
+  prior(student_t(3, 0, 2), class = "sigma"))
+
+#BRMS Model
+model_prior <- brm(mean_gi ~ .,
+                   data = pc_data,
+                   family = gaussian(),
+                   prior = priors,
+                   sample_prior = "only",
+                   chains = 4, iter = 2000)
+
+# Evaluates the model by comparing the observed data with the simulated data 
+pp_check(model_prior)  # should look like plausible mean_gi values
+```
+
+## Conclusion
+
+After running various models to answer our research question, we determined running a BRMS model including the results from our PCA was the best approach. We also wanted to update our model with better informed priors.
+
+Our final model and explanatory data analysis can be found in our "Explanatory Data Analysis" quarto document.
